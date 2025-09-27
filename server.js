@@ -1,79 +1,66 @@
-// import express
 const express = require('express');
+const { Sequelize, DataTypes } = require('sequelize');
 
-//create a new express app
 const app = express();
-
-//create a new port
-const PORT = process.env.PORT || 3000;
-
-
-// middleware to parse the body of the request JSON
 app.use(express.json());
 
-//  base de datos en memoria (se pierde cuando se reinicia el servidor) JSON
-let users = [];
-let nextId = 1
-
-// GET /users
-app.get('/users', (req, res) => {
-    res.json(users);
+// Configuración de Sequelize con Postgres
+const sequelize = new Sequelize('crud_db', 'admin', 'admin123', {
+  host: 'db',
+  dialect: 'postgres'
 });
 
-// GET /users/:id
-app.get('/users/:id', (req, res) => {
-    const id = Number(req.params.id);
-    const user = users.find( u => u.id === id)
-    if (!user) {
-        return res.status(404).json({ message: 'Usuario no encontrado' });
-    }
+// Modelo Usuario
+const User = sequelize.define('User', {
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  email: {
+    type: DataTypes.STRING,
+    unique: true,
+    allowNull: false
+  }
+});
+
+// Sincronizar modelo con DB
+sequelize.sync()
+  .then(() => console.log('✅ DB conectada y modelo sincronizado'))
+  .catch(err => console.error('❌ Error en DB:', err));
+
+// Rutas CRUD
+app.get('/users', async (req, res) => {
+  const users = await User.findAll();
+  res.json(users);
+});
+
+app.post('/users', async (req, res) => {
+  const user = await User.create(req.body);
+  res.json(user);
+});
+
+app.put('/users/:id', async (req, res) => {
+  const user = await User.findByPk(req.params.id);
+  if (user) {
+    await user.update(req.body);
     res.json(user);
+  } else {
+    res.status(404).json({ error: 'Usuario no encontrado' });
+  }
 });
 
-// POST /users
-// Crear un nuevo usuario
-// Body JSON esperado: { name: string, email: string }
-
-app.post('/users', (req, res) => {
-    const { name, email } = req.body || {};
-
-    if (!name || !email) {
-        return res.status(400).json({ error: 'Nombre y email son requeridos' });
-    }
-
-    // super basico sin validar email unico ni formato
-    const newUser = {
-        id: nextId++,
-        name,
-        email,
-        createdAt: new Date().toISOString()
-    }
-
-    users.push(newUser);
-    res.status(201).json(newUser);
+app.delete('/users/:id', async (req, res) => {
+  const user = await User.findByPk(req.params.id);
+  if (user) {
+    await user.destroy();
+    res.json({ message: 'Usuario eliminado' });
+  } else {
+    res.status(404).json({ error: 'Usuario no encontrado' });
+  }
 });
 
-/**
- * DELETE /users/:id
- * Elimina un usuario por id
- */
-app.delete('/users/:id', (req, res) => {
-    const id = Number(req.params.id);
-    const index = users.findIndex(u => u.id === id);
-  
-    if (index === -1) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-  
-    users.splice(index, 1);
-    // Podés devolver 204 sin body; acá devuelvo 204
-    return res.status(204).send();
-  });
-
-
-
-
-//start the server
+// Iniciar servidor en variable PORT o 3000 por defecto
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });
